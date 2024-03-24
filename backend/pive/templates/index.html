@@ -1,0 +1,11 @@
+<!-- templates/index.html -->
+{% extends 'base.html' %}
+
+{% block content %}
+  <!-- You can include 'center.html' here or write page-specific content -->
+  {% include 'components/center.html' %}
+  <!-- or -->
+  <!-- Custom content for this page -->
+  <h2>This is the index page</h2>
+  <p>Welcome to the main content area of the index page.</p>
+{% endblock %}
