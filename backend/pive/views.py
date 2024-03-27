@@ -1,7 +1,9 @@
-# pive/views.py
+# views.py
 from django.shortcuts import render
 
-
 def index(request):
-    # Render the index page
-    return render(request, "index.html")
+    # Define the range you want to use in your template here
+    context = {
+        'range': range(4)
+    }
+    return render(request, 'index.html', context)

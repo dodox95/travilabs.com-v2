@@ -12,20 +12,15 @@
 
   {% include 'components/navbar.html' %}
 
+  <!-- Start container for main content -->
   <div class="container-fluid">
-    <div class="row">
-      
-
-      <div class="col-md-8">
-        {% block content %}
-        <!-- Main content goes here -->
-        {% endblock content %}
-      </div>
-
-
-    </div>
+    {% block content %}
+    <!-- Content from child templates will be injected here -->
+    {% endblock content %}
   </div>
+  
   {% include 'components/footer.html' %}
+
   <!-- Bootstrap JS, Popper.js, and jQuery -->
   <script src="https://code.jquery.com/jquery-3.3.1.slim.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/popper.js/1.14.7/umd/popper.min.js"></script>
