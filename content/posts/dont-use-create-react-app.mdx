@@ -1,0 +1,91 @@
+---
+title: Don't use create-react-app!
+description: Why you should stop using use create-react-app
+date: 2023-01-08
+---
+
+<Image
+  src="/CreateReactAppSocialimage.png"
+  width="718"
+  height="404"
+  alt="Image"
+/>
+
+Yo guys I feel many people who for the first time touch NextJS or Vite for sure love that. All small things and bigger nowadays getting simpler and easy to use than before - and that's great! Who likes teachers who explain even small thing as if it were quantum theory - they just complicate everything to sound like professors.
+
+I spend many hours when I was 15-25 years old and I thought this world is so complicated cuz my teachers of math of example did exmplain me the math in very odd way. All things they complicated make the world difficult to understand but now when I'm 28 years old I'm understand they wrong, cuz their exmplains were just to complicated and understandless.
+
+Every day I understand more and more nowadays but then I didn't. Now I now that all depends of how someone explains you the problem - describing is 50% of the problem resolve. People and teachers in particular should strive to explain various issues as easily as possible, relying on comparisons, and leave memorization to computer memory - but it's the article about the teachers at all foucs on Why you should stop using use `create react app`
+
+# Why you should stop using use `create-react-app`
+
+<Image src="/vite.webp" width="718" height="404" alt="Image" />
+
+I'll admit frankly that I'm a very lazy person who always tries to look for the easiest and quickest solutions to anything in my life. I think that a good programmer is a person who tries to solve problems in a similar way that is simple, fast, effective - the rest does not matter. I hate to complicate my life, so if I want to install 'Tailwind' or just work effectively and quickly with a quick refresh on the code, I just use Vite when working either with Vue or React. Of course when I work with NextJS I don't use Vite I don't see such a need because Vite by itself in my opinion doesn't make sense to use next to NextJS (Although I may be wrong), but if I start working on a project using React (and I do it more often than I use NextJS alone) then I just choose Vite.
+
+Vite is a modern tool for building web applications, which is gaining popularity as an alternative to Create React App (CRA). It is distinguished primarily by a significant acceleration of the development process, offering immediate start and quick reconstruction of modules. Here are some key reasons why you should consider using Vite instead of traditional CRA for your React projects.
+
+### Speed and Efficiency
+
+<Image src="/vitespeed.png" width="718" height="404" alt="Image" />
+Vite uses modern browsers that support ES modules, allowing code to be loaded without
+the need for bundling during development. Thanks to this, the start of the project
+and the process of refreshing the page after making changes are almost immediate,
+regardless of the size of the project. In contrast, CRA relies on Webpack and Babel,
+which can lead to significant delays, especially in larger projects.{" "}
+
+### Ease of Configuration
+
+<Image src="/vite.jpg" width="718" height="404" alt="Image" />
+
+Vite offers a simple and minimal initial setup, eliminating the need to deeply understand and manually adjust complex Webpack and Babel configurations. Vite users can enjoy simplicity and clarity by focusing on building apps rather than configuring tools.
+
+### Type support
+
+<Image src="/tsvite.png" width="718" height="404" alt="Image" />
+
+Vite works seamlessly with TypeScript "out of the box", which is a significant advantage for projects using the language for typing. CRA also offers support for TypeScript, but this requires additional configuration and may encounter some limitations related to type handling during development.
+
+### Solutions for Manufacturing
+
+{" "}
+
+<Image src="/6xkzyzdocufkqc6dhpgb.jpg" width="718" height="404" alt="Image" />
+
+Even though Vite does not use a bundler in development mode, it uses Rollup to build the final version of the application - a proven bundling tool that is lightweight and configured to optimize the code for production. Thanks to this, applications built with Vite are fast and efficient even after implementation.
+
+### Compatibility with Modern Frameworks
+
+<Image src="/ecosystem-vite4.png" width="718" height="404" alt="Image" />
+
+Vite is not limited to React. It supports many modern frontend frameworks, such as Vue, Svelte, or even Vanilla JS, which makes it a flexible tool for working on a variety of web projects.
+
+### Community and Support
+
+Vite is quickly gaining popularity among developers, which translates into a growing community and a rich set of plugins. Users can count on support and quick introduction of new functionalities, which is crucial for modern development tools.
+
+### Potential Challenges
+
+Despite its many advantages, Vite may encounter some challenges, especially in the case of applications requiring specific configuration or integration with non-standard solutions. Some of these issues may be related to differences in bundling between development and production, requiring additional vigilance from developers.
+
+Overall, Vite offers significant improvements in speed, performance, and ease of use compared to Create React App. Its adaptation to the React project not only increases developer productivity, but also improves the end-user experience with faster and more optimal web applications. So it's worth considering Vite as a tool for building modern React applications.
+
+### Rollup is the key to rapid refresh your app.
+
+Rollup in the context of Vite is a bundling tool used to prepare an application for production. In the development phase, Vite uses esbuild, a tool characterized by lightning-fast bundling speeds, which, however, is not used when building the production version of the application. This is where Rollup comes into the picture.
+What is Rollup?
+
+Rollup is a modern JavaScript module bundler that analyzes imports and exports in the application and then collects them into individual files. Its purpose is to optimize the code by removing unnecessary fragments (dead code) and reducing the number of files that must be downloaded by the user's browser, which affects the speed of application loading.
+Why does Vite use Rollup to build production?
+
+- Optimization: Rollup effectively analyzes dependencies between modules, enabling effective code optimization. This allows you to remove unused code (tree-shaking) and minimize file size, which is crucial for the performance of web applications.
+
+- ESM Compatibility: Rollup was one of the first bundling tools to natively support ES modules (ECMAScript Modules), which is fully compatible with modern JavaScript and web browser standards. Vite, using Rollup, ensures high compatibility of the application being built with the modern JavaScript ecosystem.
+
+- Plugins and Extensions: Rollup has a rich plugin ecosystem that allows you to expand its functionality and adapt the application building process to the specific needs of the project. Vite uses this plugin system to integrate with various tools and frameworks.
+
+- Focus on Bundling: Unlike Webpack, Rollup mainly focuses on bundling JavaScript modules, which makes it more effective in this specific role. For projects using Vite, this means the ability to use a specialized tool to optimize code for production.
+
+### Summary
+
+The use of Rollup by Vite in the phase of building applications for production allows for effective code preparation: it minimizes its size by eliminating unnecessary code, ensures compatibility with modern JavaScript standards, and offers flexibility thanks to the plug-in system. Thanks to these advantages, Vite provides developers with a fast and efficient tool to work with, while ensuring that the final application will be optimally prepared for serving to users.

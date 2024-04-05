@@ -1,0 +1,325 @@
+---
+title: The TON blockchain quick review
+description: The quick review of the TON blockchain
+date: 2023-01-02
+---
+
+<Image src="/tonex.jpg" width="718" height="404" alt="Image" />
+Nowadays when the bull market has been back we talk loud about cryptocurrencies and
+other markets. Solana, Ethereum, Base and Bitcoin alone live well cuz the money back
+into markets.
+
+By default, we see the price results of Solana, Ethereum, Bitcoin and so on but wait... we also see $TON token (The Open Network) in the first 15th place... what is it? - Let's take a "quick" look on this.
+
+## We today have to explain it in a pill:
+
+What is The Open Network blockchain and why worth to interest it in?
+We heard about Ethereum killers many times as Solana killers as well. Very often I were interested about other blockchains that could be alternative for Ethereum that unfortunately is so expensive for small investors and traders.
+
+The `The Open Network` blockchain has been created by Durov brothers which also created `Telegram` but when they blew it with their fundraising (about 2 BLN dollars) the SEC decided they had to give the money back, and the Durov brothers simply abandoned the project and left it to The Open Network Foundation, which continued work on the blockchain.
+
+The dates here are doesn't matter we will not focus on things that you can see read into Wikipedia. `TON` previously named `GRAM` but later the name of token has been changed into `TON`. What was interesting later?
+
+<Image src="/mineton.jpeg" width="718" height="404" alt="Image" />
+```html
+
+In the past (2021) you could mine $TON tokens by using your GPU miners. They
+circumvented the legal prohibition on token redistribution by sending tokens
+directly - they got around it by creating a smart contract for token
+redistribution using the Proof of Work algorithm, but we didn't actually secure
+anything by copying $TON they just circumvented the law that way.
+
+````
+
+Here you will find the documentation how it worked then, [https://ton.org/mining](https://ton.org/mining).
+
+---
+
+## Why TON blockchain exploded ?
+<Image src="/toncoin.png" width="718" height="404" alt="Image" />
+
+
+Very often people ask why some crypto price explode? We're looking for the logic responses for anything but in crypto not always it's meaningful. **TECHNOLOGY and MARKETING are KEYS! but... more MARKETING.** The Open Network gives us opportunites to connect the Telegram groups world with the blockchain that in my opinion is the key. For the first time in my opinion in the crypto world there is more important Telegram than Twitter (X) when you want to shill your token.
+
+**A few reasons in my opinion why TON exploded:**
+
+1.  Correlation with Telegram. The vision of combining the Telegram app with blockchain makes quite an impression, not only technologically, but especially in marketing. (The Russians finally have their alternative to Ethereum).
+2.  An entire ready-made ecosystem for selling NFTs, Tokens (Jettons), etc. Easy to generate a token and quite easy to use DEXY, which of course is problematic, but it gets the job done.
+3.  Quite low required LP to make an interesting Jetton. On Ethereum nowadays you have to add a real lot of money in LP, while here the requirements are still relatively ridiculously low. (On average about 200TON).
+4. Sharding promises and a mega-fast blockchain that connects other blockchains. An interesting vision, but in practice it looks a bit worse, but marketing-wise it gets the job done.
+
+The working well technology connected with a marketing and the vision make it.
+
+### The technology and opportunites
+
+I guess we could name TON as another blockchain and probably we would right - but take a quick tech look.
+
+The Open Network uses the `FunC` language.
+
+> The FunC language is used to program smart contracts on the The Open Network blockchain. Contract logic is executed in TVM, the stack-based TON Virtual Machine. FunC is a statically typed, which is similar to C.
+
+Let's take a quickly look on the basic TON smart contract that we can mint some Jettons - tokens on TON
+
+
+<Image src="/minter.png" width="718" height="404" alt="Image" />
+
+
+
+Here you will find the minter smart contract -> [https://github.com/ton-blockchain/minter-contract/tree/main/contracts](https://github.com/ton-blockchain/minter-contract/tree/main/contracts).
+
+```html
+
+;; Jettons discoverable smart contract
+
+;; storage scheme
+;; storage#_ total_supply:Coins admin_address:MsgAddress content:^Cell jetton_wallet_code:^Cell = Storage;
+
+#include "imports/stdlib.fc";
+#include "imports/params.fc";
+#include "imports/constants.fc";
+#include "imports/jetton-utils.fc";
+#include "imports/op-codes.fc";
+#include "imports/utils.fc";
+#include "imports/discovery-params.fc";
+#pragma version >=0.2.0;
+
+(int, slice, cell, cell) load_data() inline {
+    slice ds = get_data().begin_parse();
+    return (
+            ds~load_coins(), ;; total_supply
+            ds~load_msg_addr(), ;; admin_address
+            ds~load_ref(), ;; content
+            ds~load_ref() ;; jetton_wallet_code
+    );
+}
+
+() save_data(int total_supply, slice admin_address, cell content, cell jetton_wallet_code) impure inline {
+    set_data(begin_cell()
+            .store_coins(total_supply)
+            .store_slice(admin_address)
+            .store_ref(content)
+            .store_ref(jetton_wallet_code)
+            .end_cell()
+    );
+}
+
+() mint_tokens(slice to_address, cell jetton_wallet_code, int amount, cell master_msg) impure {
+    cell state_init = calculate_jetton_wallet_state_init(to_address, my_address(), jetton_wallet_code);
+    slice to_wallet_address = calculate_jetton_wallet_address(state_init);
+    var msg = begin_cell()
+            .store_uint(0x18, 6)
+            .store_slice(to_wallet_address)
+            .store_coins(amount)
+            .store_uint(4 + 2 + 1, 1 + 4 + 4 + 64 + 32 + 1 + 1 + 1)
+            .store_ref(state_init)
+            .store_ref(master_msg);
+    send_raw_message(msg.end_cell(), 1); ;; pay transfer fees separately, revert on errors
+}
+
+() recv_internal(int msg_value, cell in_msg_full, slice in_msg_body) impure {
+    if (in_msg_body.slice_empty?()) { ;; ignore empty messages
+        return ();
+    }
+    slice cs = in_msg_full.begin_parse();
+    int flags = cs~load_uint(4);
+
+    if (flags & 1) { ;; ignore all bounced messages
+        return ();
+    }
+    slice sender_address = cs~load_msg_addr();
+    cs~load_msg_addr(); ;; skip dst
+    cs~load_coins(); ;; skip value
+    cs~skip_bits(1); ;; skip extracurrency collection
+    cs~load_coins(); ;; skip ihr_fee
+    int fwd_fee = cs~load_coins(); ;; we use message fwd_fee for estimation of provide_wallet_address cost
+
+    int op = in_msg_body~load_uint(32);
+    int query_id = in_msg_body~load_uint(64);
+
+    (int total_supply, slice admin_address, cell content, cell jetton_wallet_code) = load_data();
+
+    if (op == op::mint()) {
+        throw_unless(73, equal_slices(sender_address, admin_address));
+        slice to_address = in_msg_body~load_msg_addr();
+        int amount = in_msg_body~load_coins();
+        cell master_msg = in_msg_body~load_ref();
+        slice master_msg_cs = master_msg.begin_parse();
+        master_msg_cs~skip_bits(32 + 64); ;; op + query_id
+        int jetton_amount = master_msg_cs~load_coins();
+        mint_tokens(to_address, jetton_wallet_code, amount, master_msg);
+        save_data(total_supply + jetton_amount, admin_address, content, jetton_wallet_code);
+        return ();
+    }
+
+    if (op == op::burn_notification()) {
+        int jetton_amount = in_msg_body~load_coins();
+        slice from_address = in_msg_body~load_msg_addr();
+        throw_unless(74,
+                equal_slices(calculate_user_jetton_wallet_address(from_address, my_address(), jetton_wallet_code), sender_address)
+        );
+        save_data(total_supply - jetton_amount, admin_address, content, jetton_wallet_code);
+        slice response_address = in_msg_body~load_msg_addr();
+        if (response_address.preload_uint(2) != 0) {
+            var msg = begin_cell()
+                    .store_uint(0x10, 6) ;; nobounce - int_msg_info$0 ihr_disabled:Bool bounce:Bool bounced:Bool src:MsgAddress -> 011000
+                    .store_slice(response_address)
+                    .store_coins(0)
+                    .store_uint(0, 1 + 4 + 4 + 64 + 32 + 1 + 1)
+                    .store_uint(op::excesses(), 32)
+                    .store_uint(query_id, 64);
+            send_raw_message(msg.end_cell(), 2 + 64);
+        }
+        return ();
+    }
+
+    if (op == op::provide_wallet_address()) {
+        throw_unless(75, msg_value > fwd_fee + const::provide_address_gas_consumption());
+
+        slice owner_address = in_msg_body~load_msg_addr();
+        int include_address? = in_msg_body~load_uint(1);
+
+        cell included_address = include_address?
+                ? begin_cell().store_slice(owner_address).end_cell()
+                : null();
+
+        var msg = begin_cell()
+                .store_uint(0x18, 6)
+                .store_slice(sender_address)
+                .store_coins(0)
+                .store_uint(0, 1 + 4 + 4 + 64 + 32 + 1 + 1)
+                .store_uint(op::take_wallet_address(), 32)
+                .store_uint(query_id, 64);
+
+        if (is_resolvable?(owner_address)) {
+            msg = msg.store_slice(calculate_user_jetton_wallet_address(owner_address, my_address(), jetton_wallet_code));
+        } else {
+            msg = msg.store_uint(0, 2); ;; addr_none
+        }
+        send_raw_message(msg.store_maybe_ref(included_address).end_cell(), 64);
+        return ();
+    }
+
+    if (op == 3) { ;; change admin
+        throw_unless(73, equal_slices(sender_address, admin_address));
+        slice new_admin_address = in_msg_body~load_msg_addr();
+        save_data(total_supply, new_admin_address, content, jetton_wallet_code);
+        return ();
+    }
+
+    if (op == 4) { ;; change content, delete this for immutable tokens
+        throw_unless(73, equal_slices(sender_address, admin_address));
+        save_data(total_supply, admin_address, in_msg_body~load_ref(), jetton_wallet_code);
+        return ();
+    }
+
+    throw(0xffff);
+}
+
+(int, int, slice, cell, cell) get_jetton_data() method_id {
+    (int total_supply, slice admin_address, cell content, cell jetton_wallet_code) = load_data();
+    return (total_supply, -1, admin_address, content, jetton_wallet_code);
+}
+
+slice get_wallet_address(slice owner_address) method_id {
+    (int total_supply, slice admin_address, cell content, cell jetton_wallet_code) = load_data();
+    return calculate_user_jetton_wallet_address(owner_address, my_address(), jetton_wallet_code);
+}
+
+````
+
+As you can see above Func language is more difficult than Solidity is - but if you want you can learn it.
+
+Here are the proofs that make this case so problematic for the entire TON ecosystem.
+
+- The new programming language to learn for programmers
+- More difficult to learn than Solidity and Rust
+- No frameworks like OpenZeppelin yet to use for devs
+
+But where are the positives?
+
+- There is demand for apps on TON but there are few developers of Smart Contracts and fullstacks at all - better paid for devs
+- You can make good money for just about anything. For a simple game or what is already on Ethereum for example, only transferring it to TON gives profit
+- Lots of investors, few developers - always an asset for software developers
+
+## How to mint the jetton?
+
+### It's great cuz it's easy to do.
+
+<Image src="/tonminter.png" width="718" height="404" alt="Image" />
+
+Here you will mint your jetton -> [https://minter.ton.org/](https://minter.ton.org/).
+
+One of the most great case in this blockchain is that case that we can mint our jetton in very easy way with no need to be a programmer. Just visit minter.ton.org connect your wallet, have the need number of TON tokens to pay fee and that's it! nothing special and complicated
+
+### How to explore blockchain network?
+
+<Image src="/tonexplore.png" width="718" height="404" alt="Image" />
+
+Here you will explore the ton network -> [https://tonscan.org/](https://tonscan.org/).
+
+You could ask me why should I explore the TON network for?
+
+- **To make the on-chain analysis**
+
+  Sometimes the great idea is to control wallets that could know more. It's great to see before others what some influencer for example buys before he starts the shill time. It's good to make own database of crucial wallets for us that will be useful.
+
+- **To control your transactions**
+
+  Sometimes we just want to control some transaction we sent or the transacation of other sent.
+
+- **To analyse something**
+
+  The explorer is borderless if we want to talk about the use-case. It's just worth to understand the explorer and the on-chain research.
+
+Sum up it's great to have the knowledge in using this tool
+
+## Trading on DEXs and adding LP
+
+<Image src="/stonfidex.png" width="718" height="404" alt="Image" />
+
+I think most people are going to use [Ston.fi](https://app.ston.fi/swap) or [DeDust.io](https://dedust.io/) DEXs. Yes we got two most populars DEXs on TON but remember currently the Ston.Fi is the most popular at all - around 90% of jettons added LP on Ston.Fi.
+
+So if you want to trade on `Stonf.Fi` or `DeDust.io` you have to just visit the websites connect your wallet and trade.
+
+```js
+Go to any of DEXs copy the contract of the jetton paste on any of the DEX and trade TON/JETTON or JETTON/TON that's it!
+```
+
+### Where to see the charts of jettons?
+
+To see the charts of any of the jettons we need to go to the other websites that let us to get it.
+
+1.  **If you trade jetton on DeDust.io**
+    - https://dyor.io/pl
+2.  **If you trade jetton on Ston.fi**
+    - https://www.geckoterminal.com/pl/ton/pools
+
+## What wallets worth to install?
+
+Yes! to store jettons we need wallets. Below I will explain what wallet if worth
+to install and use.
+
+<Image src="/tonkepper.jpg" width="718" height="404" alt="Image" />
+
+1.  **TonKepper**
+
+The most useful wallet is TonKepper [this link to download TonKepper](https://tonkeeper.com/). Here you can store your jettons, TON native token and so on - also you can change from the mainet into testnet by clicking many times on the diamond in settings.
+
+In my opinion TonKepper could close this list but it could be subjective.
+
+2.  **OpenMask**
+
+Great wallet similar to Metamask. Easy to change from mainet to testnet without clicking.
+The OpenMask wallet [this link to download OpenMask](https://www.openmask.app/)
+
+3.  **Telegram wallet**
+
+Now it's time to the great wallet based on the telegram app. It's very popular and easy to use.
+
+Open @Wallet on Telegram. [this link to open @wallet](https://t.me/wallet)
+
+#### Sum up the TON
+
+Of course it's not the last but first article about this blockchain. I hope we will in the futher articles will talking more about this.
+
+Dorian Szafranski 04/04/2024

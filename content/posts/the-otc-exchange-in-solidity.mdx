@@ -1,0 +1,896 @@
+---
+title: The OTC exchange in Solidity
+description: How the OTC on Ethereum works?
+date: 2023-04-09
+---
+
+<Image src="/OTCmarket.png" width="718" height="404" alt="Image" />
+Hi people, today we gonna talk about the OTC exchange based on EVM (Ethereum virtual
+Machine) that you can use on Ethereum, BSC, Arbitrum, Polygon and so on, and this
+OTC exchange will be useful there.
+
+First of all let's explain what the OTC exchange is, and when should we mind to use that?
+
+- When you're a CEO of the project and you want to run the trading without adding LP on the DEX or the CEX.
+- When you want to start the presalle your token.
+
+Of course the scenarios when you could use the OTC exchange is many, cuz all depends on you and your imagination. It's important of course to secure your OTC exchange and it's great to outsource the audit of the security it's always good thing to share your code with other - one must be humble and understand that one knows that one knows nothing.
+
+### Quick review how it works.
+
+Ok first of all we have to understand how our OTC exchange works, let's see the smart contract and try to get to know how to do that:
+
+`OTC.sol`
+
+```js
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.0;
+
+import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
+import "@openzeppelin/contracts/access/Ownable.sol";
+
+contract OTCMarket is ReentrancyGuard, Ownable {
+	struct TokenListing {
+		address seller;
+		address tokenAddress;
+		uint256 amount;
+		uint256 price;
+	}
+
+	struct EthListing {
+		address buyer;
+		uint256 amountEth;
+		address tokenAddress;
+		uint256 tokenAmountWanted;
+	}
+
+	struct TokenListingWithId {
+		uint256 listingId;
+		TokenListing listing;
+	}
+
+	struct EthListingWithId {
+		uint256 listingId;
+		EthListing listing;
+	}
+
+	mapping(uint256 => TokenListing) public tokenListings;
+	mapping(uint256 => EthListing) public ethListings;
+
+	uint256 public nextTokenListingId;
+	uint256 public nextEthListingId;
+
+	event TokenListed(
+		uint256 indexed listingId,
+		address indexed seller,
+		uint256 amount,
+		uint256 price
+	);
+	event EthListed(
+		uint256 indexed listingId,
+		address indexed buyer,
+		uint256 amountEth,
+		address tokenAddress,
+		uint256 tokenAmountWanted
+	);
+	event ListingCancelled(uint256 indexed listingId, bool isTokenListing);
+	event PurchasedWithToken(
+		uint256 indexed listingId,
+		address indexed buyer,
+		uint256 amount,
+		uint256 price
+	);
+	event PurchasedWithEth(
+		uint256 indexed listingId,
+		address indexed seller,
+		uint256 amountEth
+	);
+
+	function listTokenForSale(
+		address _tokenAddress,
+		uint256 _amount,
+		uint256 _price
+	) external {
+		require(_amount > 0, "Amount must be greater than 0");
+		IERC20(_tokenAddress).transferFrom(msg.sender, address(this), _amount);
+		tokenListings[nextTokenListingId] = TokenListing(
+			msg.sender,
+			_tokenAddress,
+			_amount,
+			_price
+		);
+		emit TokenListed(nextTokenListingId, msg.sender, _amount, _price);
+		nextTokenListingId++;
+	}
+
+	function listEthForTokens(
+		address _tokenAddress,
+		uint256 _tokenAmountWanted
+	) external payable {
+		require(msg.value > 0, "ETH amount must be greater than 0");
+		require(_tokenAmountWanted > 0, "Token amount must be greater than 0");
+		ethListings[nextEthListingId] = EthListing(
+			msg.sender,
+			msg.value,
+			_tokenAddress,
+			_tokenAmountWanted
+		);
+		emit EthListed(
+			nextEthListingId,
+			msg.sender,
+			msg.value,
+			_tokenAddress,
+			_tokenAmountWanted
+		);
+		nextEthListingId++;
+	}
+
+	function cancelListing(uint256 _listingId, bool isTokenListing) external {
+		if (isTokenListing) {
+			TokenListing memory listing = tokenListings[_listingId];
+			require(listing.seller == msg.sender, "Not the seller");
+			IERC20(listing.tokenAddress).transfer(msg.sender, listing.amount);
+			delete tokenListings[_listingId];
+		} else {
+			EthListing memory listing = ethListings[_listingId];
+			require(listing.buyer == msg.sender, "Not the buyer");
+			payable(msg.sender).transfer(listing.amountEth);
+			delete ethListings[_listingId];
+		}
+		emit ListingCancelled(_listingId, isTokenListing);
+	}
+
+	// Nowa funkcja umożliwiająca właścicielowi anulowanie listingów
+	function cancelListingByOwner(
+		uint256 _listingId,
+		bool isTokenListing
+	) external onlyOwner {
+		if (isTokenListing) {
+			TokenListing storage listing = tokenListings[_listingId];
+			require(listing.seller != address(0), "Listing does not exist");
+			IERC20(listing.tokenAddress).transfer(
+				listing.seller,
+				listing.amount
+			);
+			delete tokenListings[_listingId];
+		} else {
+			EthListing storage listing = ethListings[_listingId];
+			require(listing.buyer != address(0), "Listing does not exist");
+			payable(listing.buyer).transfer(listing.amountEth);
+			delete ethListings[_listingId];
+		}
+		emit ListingCancelled(_listingId, isTokenListing);
+	}
+
+	function purchaseTokenWithEth(
+		uint256 _listingId
+	) external payable nonReentrant {
+		TokenListing memory listing = tokenListings[_listingId];
+		require(msg.value == listing.price, "Incorrect price");
+		IERC20(listing.tokenAddress).transfer(msg.sender, listing.amount);
+		payable(listing.seller).transfer(msg.value);
+		emit PurchasedWithToken(
+			_listingId,
+			msg.sender,
+			listing.amount,
+			msg.value
+		);
+		delete tokenListings[_listingId];
+	}
+
+	function purchaseETHWithTokens(
+		uint256 ethListingId,
+		uint256 tokenAmount
+	) external nonReentrant {
+		EthListing memory ethListing = ethListings[ethListingId];
+		require(
+			ethListing.tokenAddress != address(0),
+			"ETH listing does not exist"
+		);
+		require(
+			ethListing.tokenAmountWanted <= tokenAmount,
+			"Insufficient token amount"
+		);
+
+		uint256 ethAmount = ethListing.amountEth;
+		address buyer = msg.sender;
+		address seller = ethListing.buyer; // W tym kontekście, "kupujący" ETH jest sprzedającym tokeny.
+
+		IERC20(ethListing.tokenAddress).transferFrom(
+			buyer,
+			seller,
+			tokenAmount
+		);
+		payable(buyer).transfer(ethAmount);
+
+		emit PurchasedWithEth(ethListingId, seller, ethAmount);
+
+		// Usunięcie oferty ETH po zakończeniu transakcji
+		delete ethListings[ethListingId];
+	}
+
+	// Function to view active token listings
+	function getActiveTokenListings()
+		external
+		view
+		returns (TokenListingWithId[] memory)
+	{
+		uint256 activeCount = 0;
+		for (uint256 i = 0; i < nextTokenListingId; i++) {
+			if (tokenListings[i].seller != address(0)) {
+				activeCount++;
+			}
+		}
+
+		TokenListingWithId[] memory activeListings = new TokenListingWithId[](
+			activeCount
+		);
+		uint256 currentIndex = 0;
+		for (uint256 i = 0; i < nextTokenListingId; i++) {
+			if (tokenListings[i].seller != address(0)) {
+				activeListings[currentIndex] = TokenListingWithId(
+					i,
+					tokenListings[i]
+				);
+				currentIndex++;
+			}
+		}
+
+		return activeListings;
+	}
+
+	// Function to view active ETH listings
+	// Zmodyfikowana funkcja w kontrakcie
+	function getActiveEthListings()
+		external
+		view
+		returns (EthListingWithId[] memory)
+	{
+		uint256 activeCount = 0;
+		for (uint256 i = 0; i < nextEthListingId; i++) {
+			if (ethListings[i].buyer != address(0)) {
+				activeCount++;
+			}
+		}
+
+		EthListingWithId[] memory activeListings = new EthListingWithId[](
+			activeCount
+		);
+		uint256 currentIndex = 0;
+		for (uint256 i = 0; i < nextEthListingId; i++) {
+			if (ethListings[i].buyer != address(0)) {
+				activeListings[currentIndex] = EthListingWithId(
+					i,
+					ethListings[i]
+				);
+				currentIndex++;
+			}
+		}
+
+		return activeListings;
+	}
+}
+```
+
+### First of all - What is a Smart Contract?
+
+First, a smart contract is like a set of rules and agreements written in code that automatically execute on the blockchain when certain conditions are met. Think of it as a vending machine: you select a product, insert the money, and the machine automatically gives you the product and any change you're owed without the need for a human to check the transaction.
+Overview of the OTCMarket Contract.
+
+This contract above allows users to list tokens or Ethereum for sale and purchase them from each other directly without intermediaries. It's called "Over-The-Counter" because it deals directly between two parties without the oversight of an exchange.
+
+## Key Components of the Contract
+
+<Image src="/contract.png" width="718" height="404" alt="Image" />
+
+- TokenListing and EthListing Structures: These are like templates to store information about what's being sold. For tokens, it stores who is selling, what token and how much, and the price. For Ethereum listings, it stores who wants to buy, how much Ethereum they are offering, and what token (and how much of it) they want in return.
+
+- Mappings for Listings: Think of mappings as big, searchable lists. There's one for token listings and another for Ethereum listings, where each listing is stored with a unique ID.
+
+- Events: These are like announcements or notifications that something has happened, such as a new listing being created or a purchase being made. They help people or other contracts know when actions occur.
+
+### How It Works, Step-by-Step
+
+<Image src="/ecowayotc.png" width="718" height="404" alt="Image" />
+
+### 1. Listing Tokens or Ethereum for Sale:
+
+A user can list tokens for sale by specifying the token's address, how much they're selling, and the price. The contract then transfers the tokens from the seller to itself for safekeeping until sold.
+Similarly, a user can offer Ethereum in exchange for tokens by specifying how much Ethereum they're offering and what token (and amount) they want. The Ethereum is held by the contract until the transaction is completed.
+
+- Canceling a Listing:
+  If someone changes their mind, they can cancel their listing, and the contract will return the tokens or Ethereum to them.
+
+- Purchasing:
+  To buy tokens listed for sale, a buyer sends the correct amount of Ethereum to the contract, which then transfers the tokens to the buyer and the Ethereum to the seller.
+  To purchase Ethereum with tokens, a buyer sends the required tokens to the contract, which then transfers the Ethereum to the buyer.
+
+- Viewing Active Listings:
+  Anyone can view active listings for both tokens and Ethereum. The contract keeps track of these listings and provides a way to retrieve them.
+
+- Special Functions for the Contract Owner
+  The contract owner (the creator or designated controller of the contract) has the ability to cancel any listing. This could be used for managing fraudulent or problematic listings.
+
+- Ensuring Safety and Security
+  The contract uses a feature called ReentrancyGuard to prevent a type of attack where someone could repeatedly call a function in a way that's harmful.
+  It also inherits from Ownable, a pattern that restricts certain actions (like canceling listings) to the owner of the contract for additional control and security.
+
+### In Summary
+
+This smart contract acts as a marketplace where users can safely list and purchase tokens or Ethereum directly with each other, with automated processes handling the transfers and ensuring security. It allows for flexibility in trading, provides mechanisms for managing listings, and ensures that transactions are conducted fairly and securely.
+
+---
+
+## A little more technical
+
+```js
+// src\ICOToken.tsx
+import React, { useState, useEffect } from "react";
+import { useWeb3React } from "@web3-react/core";
+import { ethers } from "ethers";
+import { toast } from "react-hot-toast";
+import OTCMarketArtifacts from "../src/artifacts/contracts/OTC.sol/OTCMarket.json";
+import ITManTokenArtifacts from "../src/artifacts/contracts/ITManToken.sol/ITManToken.json";
+
+const tokenAddress = "0x786c0F5672AB580aDE52882A486d186d89812Ea3";
+const otcMarketAddress = "0xD24dB8124b57dB7511860f98d78A914070E524Ba";
+
+function OTCMarketComponent() {
+  const { account, library } = useWeb3React();
+  const [amount, setAmount] = useState("");
+  const [price, setPrice] = useState("");
+  const [tokenListings, setTokenListings] = useState([]);
+  const [ethListings, setEthListings] = useState([]);
+  const [isOwner, setIsOwner] = useState(false);
+  const [actionType, setActionType] = useState("sell"); // 'sell' for selling tokens, 'buy' for buying with ETH
+
+  useEffect(() => {
+    const checkOwnerStatus = async () => {
+      if (library) {
+        const contract = new ethers.Contract(
+          otcMarketAddress,
+          OTCMarketArtifacts.abi,
+          library.getSigner()
+        );
+        const owner = await contract.owner();
+        setIsOwner(owner.toLowerCase() === account?.toLowerCase());
+        fetchListings();
+      }
+    };
+
+    checkOwnerStatus();
+  }, [library, account]);
+
+  const fetchListings = async () => {
+    const contract = new ethers.Contract(
+      otcMarketAddress,
+      OTCMarketArtifacts.abi,
+      library.getSigner()
+    );
+    try {
+      const tokenListings = await contract.getActiveTokenListings();
+      const ethListings = await contract.getActiveEthListings();
+      setTokenListings(tokenListings);
+      setEthListings(ethListings);
+    } catch (error) {
+      console.error("Failed to fetch listings:", error);
+      toast.error("Could not fetch listings.");
+    }
+  };
+
+  const listTokenForSale = async () => {
+    if (!amount || !price) {
+      toast.error("Please enter both amount and price.");
+      return;
+    }
+
+    const tokenContract = new ethers.Contract(
+      tokenAddress,
+      ITManTokenArtifacts.abi,
+      library.getSigner(account)
+    );
+    try {
+      const amountInWei = ethers.utils.parseUnits(amount, "ether");
+      const approveTx = await tokenContract.approve(
+        otcMarketAddress,
+        amountInWei
+      );
+      await approveTx.wait();
+      toast.success("Token usage approved successfully.");
+
+      const otcContract = new ethers.Contract(
+        otcMarketAddress,
+        OTCMarketArtifacts.abi,
+        library.getSigner(account)
+      );
+      const listTx = await otcContract.listTokenForSale(
+        tokenAddress,
+        amountInWei,
+        ethers.utils.parseUnits(price, "ether")
+      );
+      await listTx.wait();
+      toast.success("Token listed for sale successfully.");
+      fetchListings();
+    } catch (error) {
+      console.error("Failed to list token for sale or approval failed:", error);
+      toast.error("Could not complete the operation.");
+    }
+  };
+
+  const listEthForTokens = async () => {
+    if (!amount || !price) {
+      toast.error("Please enter both amount and price.");
+      return;
+    }
+
+    try {
+      const ethAmountInWei = ethers.utils.parseEther(price); // Assuming 'price' is the amount of ETH the user wants to spend
+      const tokenAmountInWei = ethers.utils.parseUnits(amount, "ether");
+
+      // You need to make sure your contract is payable if you're sending ETH with the transaction
+      const otcContract = new ethers.Contract(
+        otcMarketAddress,
+        OTCMarketArtifacts.abi,
+        library.getSigner(account)
+      );
+      const listTx = await otcContract.listEthForTokens(
+        tokenAddress,
+        tokenAmountInWei,
+        { value: ethAmountInWei }
+      );
+      await listTx.wait();
+      toast.success("ETH listed for tokens successfully.");
+      fetchListings();
+    } catch (error) {
+      console.error("Failed to list ETH for tokens:", error);
+      toast.error("Could not complete the operation.");
+    }
+  };
+
+  const cancelListing = async (listingId, isTokenListing) => {
+    const contract = new ethers.Contract(
+      otcMarketAddress,
+      OTCMarketArtifacts.abi,
+      library.getSigner(account)
+    );
+    try {
+      const tx = await contract.cancelListing(listingId, isTokenListing);
+      await tx.wait();
+      toast.success("Listing cancelled successfully.");
+      fetchListings();
+    } catch (error) {
+      console.error("Failed to cancel listing:", error);
+      toast.error("Could not cancel listing.");
+    }
+  };
+
+  const cancelListingByOwner = async (listingId, isTokenListing) => {
+    if (!isOwner) {
+      toast.error("Only the contract owner can cancel listings this way.");
+      return;
+    }
+
+    const contract = new ethers.Contract(
+      otcMarketAddress,
+      OTCMarketArtifacts.abi,
+      library.getSigner()
+    );
+    try {
+      const tx = await contract.cancelListingByOwner(listingId, isTokenListing);
+      await tx.wait();
+      toast.success("Listing cancelled by owner successfully.");
+      fetchListings();
+    } catch (error) {
+      console.error("Failed to cancel listing by owner:", error);
+      toast.error("Could not cancel listing by owner.");
+    }
+  };
+
+  // Add two new functions in OTCMarketComponent
+
+  const purchaseTokenWithEth = async (listingId) => {
+    if (!library || !account) {
+      toast.error("Please connect your wallet.");
+      return;
+    }
+
+    // Find the listing object based on listingId
+    const listing = tokenListings.find((l) => l.listingId === listingId);
+    if (!listing) {
+      toast.error("Listing not found.");
+      return;
+    }
+
+    const contract = new ethers.Contract(
+      otcMarketAddress,
+      OTCMarketArtifacts.abi,
+      library.getSigner()
+    );
+
+    try {
+      // Convert the price to BigNumber format
+      const price = ethers.BigNumber.from(listing.listing.price);
+      const tx = await contract.purchaseTokenWithEth(listingId, {
+        value: price,
+      });
+      await tx.wait();
+
+      toast.success("Tokens purchased successfully.");
+      fetchListings(); // Refresh listings to reflect the changes
+    } catch (error) {
+      console.error("Purchase failed:", error);
+      toast.error("Failed to purchase tokens.");
+    }
+  };
+
+  const purchaseTokenWithListing = async (ethListingId, tokenListingId) => {
+    if (!library || !account) {
+      toast.error("Please connect your wallet.");
+      return;
+    }
+
+    try {
+      const contract = new ethers.Contract(
+        otcMarketAddress,
+        OTCMarketArtifacts.abi,
+        library.getSigner(account)
+      );
+      const transaction = await contract.purchaseTokenWithListing(
+        ethListingId,
+        tokenListingId
+      );
+      await transaction.wait();
+      toast.success("Trade successful!");
+      fetchListings(); // Refresh listings
+    } catch (error) {
+      console.error("Trade failed:", error);
+      toast.error("Trade failed.");
+    }
+  };
+
+  const purchaseETHWithTokens = async (ethListingId) => {
+    if (!library || !account) {
+      toast.error("Please connect your wallet.");
+      return;
+    }
+
+    const ethListing = ethListings.find(
+      (listing) => listing.listingId === ethListingId
+    );
+    if (!ethListing) {
+      toast.error("ETH listing not found.");
+      return;
+    }
+
+    const tokenAmount = ethListing.listing.tokenAmountWanted;
+
+    const contract = new ethers.Contract(
+      otcMarketAddress,
+      OTCMarketArtifacts.abi,
+      library.getSigner(account)
+    );
+    const tokenContract = new ethers.Contract(
+      tokenAddress,
+      ITManTokenArtifacts.abi,
+      library.getSigner(account)
+    );
+
+    try {
+      // Najpierw zatwierdź tokeny do transferu
+      const approvalTx = await tokenContract.approve(
+        otcMarketAddress,
+        tokenAmount
+      );
+      await approvalTx.wait();
+
+      // Zrealizuj zakup ETH za tokeny
+      const tx = await contract.purchaseETHWithTokens(
+        ethListingId,
+        tokenAmount
+      );
+      await tx.wait();
+
+      toast.success("ETH purchased successfully with tokens.");
+      fetchListings();
+    } catch (error) {
+      console.error("Purchase failed:", error);
+      toast.error("Failed to purchase ETH with tokens.");
+    }
+  };
+
+  return (
+    <div className="min-h-screen bg-gradient-to-r from-gray-700 via-gray-800 to-gray-900 pt-7 pb-10">
+      <h2 className="text-4xl md:text-5xl font-bold text-gray-200 text-center my-6">
+        EcoWay OTC Market
+      </h2>
+
+      <div>
+        {/* Allow users to choose an action: sell tokens or buy tokens with ETH */}
+        <div className="flex justify-center">
+          <div className="w-1/3 text-gray-200">
+            What do you want to do?
+            <select
+              value={actionType}
+              onChange={(e) => setActionType(e.target.value)}
+              className="select select-bordered w-full max-w-xs"
+            >
+              <option value="sell" className="text-gray-900">
+                Sell Tokens
+              </option>
+              <option value="buy" className="text-gray-900">
+                Buy Tokens with ETH
+              </option>
+            </select>
+          </div>
+        </div>
+
+        <div className="flex flex-col space-y-4 items-center pb-3">
+          <input
+            type="text"
+            value={amount}
+            onChange={(e) => setAmount(e.target.value)}
+            placeholder="Amount"
+            className="input input-bordered w-full max-w-xs"
+          />
+          <input
+            type="text"
+            value={price}
+            onChange={(e) => setPrice(e.target.value)}
+            placeholder="Price in ETH"
+            className="input input-bordered w-full max-w-xs"
+          />
+        </div>
+
+        {actionType === "sell" && (
+          <button
+            onClick={listTokenForSale}
+            className="border-2 border-blue-600 rounded-lg px-3 py-2 text-blue-400 cursor-pointer hover:bg-blue-600 hover:text-blue-200"
+          >
+            List $ECY For $ETH
+          </button>
+        )}
+        {actionType === "buy" && (
+          <button
+            onClick={listEthForTokens}
+            className="border-2 border-yellow-600 rounded-lg px-3 py-2 text-yellow-400 cursor-pointer hover:bg-yellow-600 hover:text-yellow-200"
+          >
+            List $ETH For $ECY
+          </button>
+        )}
+      </div>
+      <div className="flex flex-col md:flex-row -mx-4">
+        <div className="md:w-1/2 px-4">
+          <h2 className="text-sm md:text-sm font-bold text-gray-200 text-center my-6">
+            <div className="badge badge-primary">Sell Offers</div>
+          </h2>
+          <div className="bg-gray-300 text-white p-4 rounded-lg shadow-lg">
+            {tokenListings.map((listingWithId) => {
+              const { listingId, listing } = listingWithId;
+              return (
+                <div
+                  key={listingId.toString()}
+                  className="bg-white shadow-md rounded-lg p-4 mb-4"
+                >
+                  <div className="flex items-center justify-between mb-3">
+                    <div className="badge badge-secondary">
+                      ID: {listingId.toString()}
+                    </div>
+                    <p className="text-sm text-gray-600">
+                      <div className="badge badge-accent">Seller: </div>
+                      <div className="badge badge-ghost">{listing.seller}</div>
+                    </p>
+                  </div>
+                  <div className="mb-3">
+                    <p className="text-indigo-500 font-semibold text-lg">
+                      You will Get:{" "}
+                      <div className="badge badge-primary">
+                        {ethers.utils.formatUnits(listing.amount, "ether")} ECY
+                      </div>
+                    </p>
+                    <p className="text-indigo-500 font-semibold text-lg">
+                      For:{" "}
+                      <div className="badge badge-neutral">
+                        {ethers.utils.formatEther(listing.price)} ETH
+                      </div>
+                    </p>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <button
+                      onClick={() => cancelListing(listingId, true)}
+                      className="border-2 border-red-600 rounded-lg px-3 py-2 text-red-400 cursor-pointer hover:bg-red-600 hover:text-red-200"
+                    >
+                      Cancel Listing
+                    </button>
+                    <button
+                      onClick={() => purchaseTokenWithEth(listingId)}
+                      className="border-2 border-green-600 rounded-lg px-3 py-2 text-green-400 cursor-pointer hover:bg-green-600 hover:text-green-200"
+                    >
+                      Buy with ETH
+                    </button>
+                    {isOwner && (
+                      <button
+                        onClick={() => cancelListingByOwner(listingId, true)}
+                        className="border-2 border-gray-800 rounded-lg px-3 py-2 text-gray-400 cursor-pointer hover:bg-gray-800 hover:text-gray-200"
+                      >
+                        Cancel as Owner
+                      </button>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+
+        <div className="md:w-1/2 px-4">
+          <h2 className="text-sm md:text-sm font-bold text-gray-200 text-center my-6">
+            <div className="badge badge-primary">Buy Offers</div>
+          </h2>
+          <div className="bg-gray-300 text-white p-4 rounded-lg shadow-lg">
+            {ethListings.map((ethListingWithId) => {
+              const { listingId: ethListingId, listing: ethListing } =
+                ethListingWithId;
+              return (
+                <div
+                  key={ethListingId.toString()}
+                  className="bg-white shadow-md rounded-lg p-4 mb-4"
+                >
+                  <div className="flex items-center justify-between mb-3">
+                    <div className="badge badge-secondary">
+                      ID: {ethListingId.toString()}
+                    </div>
+                    <p className="text-sm text-gray-600">
+                      <div className="badge badge-accent">Buyer: </div>
+                      <div className="badge badge-ghost">
+                        {ethListing.buyer}
+                      </div>
+                    </p>
+                  </div>
+                  <div className="mb-3">
+                    <p className="text-indigo-500 font-semibold text-lg">
+                      You will Get:{" "}
+                      <div className="badge badge-neutral">
+                        {ethers.utils.formatEther(ethListing.amountEth)} ETH
+                      </div>
+                    </p>
+                    <p className="text-indigo-500 font-semibold text-lg">
+                      For:{" "}
+                      <div className="badge badge-primary">
+                        {ethers.utils.formatUnits(
+                          ethListing.tokenAmountWanted,
+                          "ether"
+                        )}{" "}
+                        ECY
+                      </div>
+                    </p>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <button
+                      onClick={() => cancelListing(ethListingId, false)}
+                      className="border-2 border-red-600 rounded-lg px-3 py-2 text-red-400 cursor-pointer hover:bg-red-600 hover:text-red-200"
+                    >
+                      Cancel Listing
+                    </button>
+                    <button
+                      onClick={() => purchaseETHWithTokens(ethListingId)}
+                      className="border-2 border-green-600 rounded-lg px-3 py-2 text-green-400 cursor-pointer hover:bg-green-600 hover:text-green-200"
+                    >
+                      Buy This ETH With Tokens
+                    </button>
+                    {isOwner && (
+                      <button
+                        onClick={() =>
+                          cancelListingByOwner(ethListingId, false)
+                        }
+                        className="border-2 border-gray-800 rounded-lg px-3 py-2 text-gray-400 cursor-pointer hover:bg-gray-800 hover:text-gray-200"
+                      >
+                        Cancel as Owner
+                      </button>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+export default OTCMarketComponent;
+```
+
+Of course my articles are not for people who don't understand anything so I won't explain anything from the scratch, if you want to start this OTC exchange you need to have a little knowledge about React, Vite and JavaScript of course.
+
+Let's dive into how the ICOToken.tsx React component operates within a web application to interact with the blockchain, using the smart contract we discussed earlier. This component allows users to list tokens or Ethereum (ETH) for sale, cancel listings, and purchase tokens or ETH directly through a user-friendly interface. Here’s how it all comes together, step by step:
+Setting the Stage with React and Web3
+
+- Import Dependencies: The component imports React, the useWeb3React hook for integrating React with Web3 (which enables interaction with Ethereum blockchain), the ethers library (a popular Ethereum library for interacting with the blockchain and its smart contracts), and notifications library (react-hot-toast).
+
+- Import Smart Contract Artifacts: It includes the ABI (Application Binary Interface) of both the OTCMarket and a hypothetical ITManToken from their compiled contract artifacts. These ABIs are essential for the component to know how to interact with the contracts deployed on the blockchain.
+
+### 1. Component Structure and State
+
+- React Component Initialization: The component initializes with state variables to keep track of user inputs (like amount and price), listings (both token and ETH listings), and whether the current user is the owner of the contract. It also defines an actionType state to toggle between selling tokens and buying them with ETH.
+
+- UseEffect for Ownership Check: When the component mounts or the user's account changes, it checks whether the connected wallet address is the owner of the OTCMarket contract. This is crucial for enabling certain actions only for the owner, like canceling any listing.
+
+### 2. Fetching Listings
+
+- Fetching Listings: A function fetchListings calls the OTCMarket contract to retrieve active listings of tokens and ETH, updating the component state with this data. This allows the component to display current opportunities for trading on the OTC market.
+
+### 3. Listing Tokens and ETH
+
+- Listing Tokens for Sale: Users can list tokens for sale by specifying the amount and price. The component handles this by first approving the OTCMarket contract to spend the specified amount of tokens on the user's behalf (a standard ERC-20 operation) and then calling the contract’s function to create the listing.
+
+- and how many tokens they expect. The component calls the OTCMarket contract's function for this, sending the specified amount of ETH along with the transaction.
+
+### 4. Canceling Listings
+
+- Canceling Listings: Users can cancel their listings through the component, which calls the appropriate function in the OTCMarket contract. If the user is the owner of the contract, they can also cancel any listing regardless of who created it.
+
+### 5. Purchasing Tokens and ETH
+
+- Purchasing Tokens with ETH: When a user decides to buy tokens listed for sale with ETH, the component sends the appropriate amount of ETH to the OTCMarket contract, which then transfers the tokens to the buyer and the ETH to the seller.
+
+- Purchasing ETH with Tokens: For buying ETH listed in exchange for tokens, the component first ensures that the OTCMarket contract is approved to transfer the requisite amount of tokens from the buyer's account. It then calls the contract to execute the trade.
+
+### 6. React Component Rendering
+
+- Rendering the UI: The component renders a user interface allowing users to input the amount and price for their listings, choose between listing tokens or ETH, and view active listings. Buttons are provided to list tokens/ETH, cancel listings, and execute purchases. It leverages conditional rendering to show different options and information based on the user's actions and whether they are the contract owner.
+
+### 7. Interactivity and Updates
+
+- Interactivity and Real-time Updates: The component reacts to user inputs and actions, updating the blockchain state through transactions. It fetches and refreshes listings to reflect changes in real time, providing feedback via notifications on the success or failure of blockchain interactions.
+
+This detailed overview explains how the ICOToken.tsx component serves as a bridge between the user interface of a web application and the underlying blockchain smart contracts, facilitating the listing, canceling, and purchasing of tokens and ETH in an OTC market scenario. Through the use of modern web development frameworks and Ethereum libraries, it showcases a practical application of blockchain technology in decentralized finance (DeFi).
+
+### Ok how to start all?
+
+<Image src="/OTCmarket.png" width="718" height="404" alt="Image" />
+
+Embarking on a journey with the EcoWay OTC Exchange Platform involves setting up a peer-to-peer trading environment tailored for projects with native tokens that opt for direct trading avenues over traditional DEX/CEX listings. This guide distills the essential steps to initialize and deploy the EcoWay OTC Exchange, ensuring a seamless start for your blockchain-based project.
+Overview of EcoWay OTC Exchange Platform
+
+The EcoWay OTC Exchange Platform presents a sophisticated software solution enabling peer-to-peer transactions of native tokens without requiring liquidity provisioning on conventional exchange platforms. It's designed for projects seeking an alternative to immediate or any listing on decentralized (DEX) or centralized (CEX) exchanges.
+Getting Started: Key Prerequisites
+
+Before diving into the setup process, ensure you have the following prerequisites installed on your system:
+
+- Node.js: The JavaScript runtime environment necessary for running the platform.
+- Yarn Package Manager: A dependency management tool for installing and managing project dependencies.
+
+### 1. Initial Setup Process
+
+- Environment Configuration: Begin by creating a .env file based on the provided .env.example. Fill in the necessary details as discussed within your group, ensuring all configurations align with your project's specific needs.
+
+- Dependency Installation:
+  Execute yarn install in your terminal to install all required dependencies. To avoid potential discrepancies, verify your package.json specifies the Yarn version as "packageManager": "yarn@1.22.21".
+
+### 2. Wallet Seed Configuration
+
+- Private Key Update: Amend the placeholder in your `.env` file with your actual private key under `PRIVATE_KEY=<YOUR PRIVATE KEY>`. - This step is crucial for securing your transactions and smart contract interactions.
+
+### 3. Smart Contract Setup
+
+Should you need to generate a new smart contract or modify the existing one:
+
+- Remove src/types and src/artifacts directories.
+- Run npx hardhat compile in the terminal. This compiles the smart contract, regenerating src/types and src/artifacts with the updated contract information.
+
+### 4. Contract Deployment
+
+Deploy your smart contract by executing:
+`npx hardhat run --network sepolia scripts/deploy_otcmarket.ts`. The terminal will output the addresses of the deployed contracts, including details such as the token name, symbol, decimals, total supply, and owner information.
+Launching the Application
+
+To initiate the application, employ `yarn dev`. This command starts the development server, making your platform accessible for trading activities.
+Licensing and Social Links
+
+Embarking on the EcoWay OTC Exchange Platform journey represents a strategic move towards facilitating direct token trading in a secure and efficient manner. By adhering to the outlined steps, you're well-positioned to deploy a robust trading platform tailored to the unique needs of your blockchain project.
+
+Contact with me, [https://t.me/dszafranski](https://t.me/dszafranski).
+
+The repository OTC exchange [https://github.com/dodox95/otc-exchange-ecoway](https://github.com/dodox95/otc-exchange-ecoway).

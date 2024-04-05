@@ -1,0 +1,14 @@
+[
+    {"title": "About", "path": "/about"},
+    {"title": "Portfolio", "path": "/portfolio"},
+    {"title": "Contact", "path": "/contact"},
+    {"title": "Offer", "path": "/offer"},
+    {"title": "Learn", "path": "/learn"},
+    {"title": "Telegram contact", "path": "https://t.me/dszafranski"},
+
+    {"title": "The OTC exchange in Solidity", "path": "/posts/the-otc-exchange-in-solidity"},
+    {"title": "Ethereum - the great vision of the future", "path": "/posts/ethereum-the-great-vision-of-the-future"},
+    {"title": "Don't use create-react-app", "path": "/posts/dont-use-create-react-app"},
+    {"title": "The TON blockchain quick review", "path": "/posts/ton-blockchain-quick-review"}
+  ]
+  
