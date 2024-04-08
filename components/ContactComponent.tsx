@@ -26,7 +26,7 @@ const socials = [
 const Contact: React.FC = () => {
   return (
     <div className="py-8 text-center">
-      <h2 className="text-4xl font-bold text-white mb-6 animate-fade-in-down">Contact Us</h2>
+      <h2 className="text-4xl font-bold bg-white dark:bg-slate-950 text-[#333] dark:text-white mb-6 animate-fade-in-down">Contact Us</h2>
       <div className="max-w-lg mx-auto grid grid-cols-2 gap-8">
         {socials.map((social, index) => (
           <a
@@ -41,7 +41,7 @@ const Contact: React.FC = () => {
               alt={social.name}
               className="w-24 h-24 mx-auto"
             />
-            <span className="text-xl font-semibold text-white mt-2">{social.name}</span>
+            <span className="text-xl font-semibold text-white mt-2 bg-white dark:bg-slate-950 text-[#333] dark:text-white">{social.name}</span>
           </a>
         ))}
       </div>

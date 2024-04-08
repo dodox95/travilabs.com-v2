@@ -11,7 +11,7 @@ interface CardProps {
 
 const CardPortfolio: React.FC<CardProps> = ({ title, description, imageUrl, path }) => {
   return (
-    <div className="flex flex-col items-stretch bg-base-100 shadow-xl rounded-lg overflow-hidden max-w-sm mx-auto">
+    <div className="flex flex-col items-stretch bg-white dark:bg-slate-950 text-[#333] dark:text-white shadow-xl rounded-lg overflow-hidden max-w-sm mx-auto">
       <figure className="aspect-w-16 aspect-h-9">
         <img src={imageUrl} alt={title} className="object-cover" />
       </figure>
